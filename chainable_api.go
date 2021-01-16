@@ -287,3 +287,36 @@ func (db *DB) Raw(sql string, values ...interface{}) (tx *DB) {
 	}
 	return
 }
+
+// With add CTE
+//    db.With("cte_name", "SELECT * FROM users").Table("cte_name").Scan(&users)
+//    db.With("cte_name", "SELECT * FROM users WHERE name = ?", "name").Table("cte_name").Scan(&users)
+//    db.With("cte_name", db.Table("users").Where("name = ?", "name")).Table("cte_name").Scan(&users)
+//    db.With(clause.CTE{Alias: "cte_name", Columns: []string{"id", "name"}}, db.Table("users")).Table("cte_name").Scan(&users)
+//    db.With(clause.CTE{Recursive: true, Alias: "cte_name"}, db.Table("users")).Table("cte_name").Scan(&users)
+func (db *DB) With(alias interface{}, query interface{}, args ...interface{}) (tx *DB) {
+	tx = db.getInstance()
+	cte := clause.CTE{}
+	switch v := alias.(type) {
+	case string:
+		cte.Alias = v
+	case clause.CTE:
+		cte = v
+	default:
+		tx.AddError(fmt.Errorf("unsupported with args %v", alias))
+	}
+
+	switch v := query.(type) {
+	case *DB:
+		if conds := tx.Statement.BuildCondition("?", v); len(conds) > 0 {
+			cte.Expressions = conds
+			tx.Statement.AddClause(clause.With{CTEs: []clause.CTE{cte}})
+		}
+	default:
+		if conds := tx.Statement.BuildCondition(query, args...); len(conds) > 0 {
+			cte.Expressions = conds
+			tx.Statement.AddClause(clause.With{CTEs: []clause.CTE{cte}})
+		}
+	}
+	return
+}

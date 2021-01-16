@@ -1080,3 +1080,92 @@ func TestQueryWithTableAndConditionsAndAllFields(t *testing.T) {
 		t.Errorf("invalid query SQL, got %v", result.Statement.SQL.String())
 	}
 }
+
+func skipWhenUsingMySQL5(t *testing.T) {
+	if DB.Dialector.Name() == "mysql" {
+		var version string
+		err := DB.Raw("SELECT VERSION()").Scan(&version).Error
+		if err != nil {
+			t.Fatalf("got error at mysql version check: %v", err)
+		}
+		if strings.HasPrefix(version, "5.") {
+			t.Skip()
+		}
+	}
+}
+
+func TestWith(t *testing.T) {
+	skipWhenUsingMySQL5(t)
+	users := []User{
+		{Name: "with_1", Age: 10},
+		{Name: "with_2", Age: 20},
+		{Name: "with_3", Age: 30},
+		{Name: "with_4", Age: 40},
+	}
+
+	DB.Create(&users)
+
+	if err := DB.With("named_with", DB.Select("id").Table("users").Where("name LIKE ?", "with_%")).Select("*").Where("id IN (?)", DB.Table("named_with")).Find(&users).Error; err != nil {
+		t.Fatalf("got error: %v", err)
+	}
+
+	if len(users) != 4 {
+		t.Errorf("Four users should be found, instead found %d", len(users))
+	}
+
+	DB.With("above_average", DB.Select("AVG(age) AS age").Table("users").Where("name LIKE ?", "with%")).
+		Select("*").Where("name LIKE ?", "with%").Where("age >= (?)", DB.Select("age").Table("above_average")).Find(&users)
+
+	if len(users) != 2 {
+		t.Errorf("Two users should be found, instead found %d", len(users))
+	}
+}
+
+func TestWithWithRecursive(t *testing.T) {
+	skipWhenUsingMySQL5(t)
+	// sqlserver always RECURSIVE mode.
+	needRecursive := DB.Dialector.Name() != "sqlserver"
+
+	want := []int{1, 2, 3}
+	var results []int
+	if err := DB.With(
+		clause.CTE{Recursive: needRecursive, Alias: "cte"},
+		"SELECT 1 AS n UNION ALL SELECT n + 1 FROM cte WHERE n < 3",
+	).Table("cte").Pluck("n", &results).Error; err != nil {
+		t.Fatalf("got error: %v", err)
+	}
+
+	if !reflect.DeepEqual(want, results) {
+		t.Errorf("want = %v, got = %v", want, results)
+	}
+}
+
+func TestMultipleWith(t *testing.T) {
+	skipWhenUsingMySQL5(t)
+	users := []User{
+		{Name: "with_multiple_1", Age: 10, Active: true},
+		{Name: "with_multiple_2", Age: 20, Active: true},
+		{Name: "with_multiple_3", Age: 30, Active: true},
+		{Name: "with_multiple_4", Age: 40, Active: false},
+	}
+
+	DB.Create(&users)
+
+	if err := DB.With("named_with", DB.Select("id").Table("users").Where("name LIKE ?", "with_multiple%")).Select("*").Where("id IN (?)", DB.Table("named_with")).Find(&users).Error; err != nil {
+		t.Fatalf("got error: %v", err)
+	}
+
+	if len(users) != 4 {
+		t.Errorf("Four users should be found, instead found %d", len(users))
+	}
+
+	if err := DB.With("above_average", DB.Select("AVG(age) AS age").Table("users").Where("name LIKE ?", "with_multiple%")).
+		With("active_users", DB.Select("id").Table("users").Where("name LIKE ?", "with_multiple%").Where("active = ?", true)).
+		Select("*").Where("name LIKE ?", "with_multiple%").Where("age >= (?)", DB.Select("age").Table("above_average")).Where("id IN (?)", DB.Select("id").Table("active_users")).Find(&users).Error; err != nil {
+		t.Fatalf("got error: %v", err)
+	}
+
+	if len(users) != 1 {
+		t.Errorf("A user should be found, instead found %d", len(users))
+	}
+}
