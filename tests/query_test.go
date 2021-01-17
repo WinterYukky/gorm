@@ -1113,15 +1113,15 @@ func TestWith(t *testing.T) {
 		t.Errorf("Four users should be found, instead found %d", len(users))
 	}
 
-	DB.With("above_average", DB.Select("AVG(age) AS age").Table("users").Where("name LIKE ?", "with%")).
-		Select("*").Where("name LIKE ?", "with%").Where("age >= (?)", DB.Select("age").Table("above_average")).Find(&users)
+	DB.With("avg_age", DB.Select("AVG(age) AS age").Table("users").Where("name LIKE ?", "with%")).
+		Select("*").Where("name LIKE ?", "with%").Where("age >= (?)", DB.Select("age").Table("avg_age")).Find(&users)
 
 	if len(users) != 2 {
 		t.Errorf("Two users should be found, instead found %d", len(users))
 	}
 }
 
-func TestWithWithRecursive(t *testing.T) {
+func TestWithRecursive(t *testing.T) {
 	skipWhenUsingMySQL5(t)
 	// sqlserver always RECURSIVE mode.
 	needRecursive := DB.Dialector.Name() != "sqlserver"
@@ -1140,7 +1140,7 @@ func TestWithWithRecursive(t *testing.T) {
 	}
 }
 
-func TestMultipleWith(t *testing.T) {
+func TestWithMultiple(t *testing.T) {
 	skipWhenUsingMySQL5(t)
 	users := []User{
 		{Name: "with_multiple_1", Age: 10, Active: true},
@@ -1159,9 +1159,9 @@ func TestMultipleWith(t *testing.T) {
 		t.Errorf("Four users should be found, instead found %d", len(users))
 	}
 
-	if err := DB.With("above_average", DB.Select("AVG(age) AS age").Table("users").Where("name LIKE ?", "with_multiple%")).
+	if err := DB.With("avg_age", DB.Select("AVG(age) AS age").Table("users").Where("name LIKE ?", "with_multiple%")).
 		With("active_users", DB.Select("id").Table("users").Where("name LIKE ?", "with_multiple%").Where("active = ?", true)).
-		Select("*").Where("name LIKE ?", "with_multiple%").Where("age >= (?)", DB.Select("age").Table("above_average")).Where("id IN (?)", DB.Select("id").Table("active_users")).Find(&users).Error; err != nil {
+		Select("*").Where("name LIKE ?", "with_multiple%").Where("age >= (?)", DB.Select("age").Table("avg_age")).Where("id IN (?)", DB.Select("id").Table("active_users")).Find(&users).Error; err != nil {
 		t.Fatalf("got error: %v", err)
 	}
 

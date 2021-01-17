@@ -54,7 +54,7 @@ func TestWith(t *testing.T) {
 						{
 							Alias:       "cte",
 							Columns:     []string{"id", "name"},
-							Expressions: []clause.Expression{clause.Expr{SQL: "SELECT `id`,`name` FROM `users` WHERE `name` = ?", Vars: []interface{}{"jinzhu"}}},
+							Expressions: []clause.Expression{clause.Expr{SQL: "SELECT `id`,`name` FROM `users`"}},
 						},
 					},
 				},
@@ -63,7 +63,7 @@ func TestWith(t *testing.T) {
 					Tables: []clause.Table{{Name: "cte"}},
 				},
 			},
-			"WITH `cte`(`id`,`name`) AS (SELECT `id`,`name` FROM `users` WHERE `name` = ?) SELECT * FROM `cte`", []interface{}{"jinzhu"},
+			"WITH `cte`(`id`,`name`) AS (SELECT `id`,`name` FROM `users`) SELECT * FROM `cte`", nil,
 		},
 		{
 			[]clause.Interface{
